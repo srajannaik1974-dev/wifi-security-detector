@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Public Wi-Fi Security Detection</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0e17;
+      --panel:    #111827;
+      --border:   #1e3a5f;
+      --accent:   #00d4ff;
+      --safe:     #00e676;
+      --unsafe:   #ff1744;
+      --suspect:  #ffea00;
+      --text:     #c9d8e8;
+      --dim:      #4a6080;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 60px;
+      /* subtle grid background */
+      background-image:
+        linear-gradient(rgba(0,212,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .icon { font-size: 2.6rem; display: block; margin-bottom: 10px; }
+
+    h1 {
+      font-size: 1.9rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      margin-top: 6px;
+      font-size: .85rem;
+      color: var(--dim);
+      font-family: 'Share Tech Mono', monospace;
+      letter-spacing: 2px;
+    }
+
+    /* ── Buttons ──────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      padding: 12px 30px;
+      font-family: 'Exo 2', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      letter-spacing: .5px;
+      transition: transform .1s, box-shadow .2s;
+    }
+
+    button:active { transform: scale(.97); }
+
+    #btnScan {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 0 18px rgba(0,212,255,.4);
+    }
+
+    #btnScan:hover { box-shadow: 0 0 28px rgba(0,212,255,.65); }
+
+    #btnDemo {
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+    }
+
+    #btnDemo:hover { background: rgba(0,212,255,.08); }
+
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Status message ───────────────────────────────────── */
+    #status {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      color: var(--accent);
+      min-height: 22px;
+      margin-bottom: 20px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Table wrapper ────────────────────────────────────── */
+    .table-wrap {
+      width: 100%;
+      max-width: 980px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      background: #0d1b2e;
+    }
+
+    th {
+      padding: 14px 20px;
+      text-align: left;
+      font-size: .78rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(30,58,95,.5);
+      transition: background .15s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(0,212,255,.04); }
+
+    td {
+      padding: 13px 20px;
+      font-size: .95rem;
+    }
+
+    td.ssid { font-weight: 700; color: #fff; }
+    td.security {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      color: var(--dim);
+    }
+
+    /* ── Status badge ─────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .SAFE       { background: rgba(0,230,118,.15);  color: var(--safe);    border: 1px solid rgba(0,230,118,.4); }
+    .UNSAFE     { background: rgba(255,23,68,.15);  color: var(--unsafe);  border: 1px solid rgba(255,23,68,.4); }
+    .SUSPICIOUS { background: rgba(255,234,0,.12);  color: var(--suspect); border: 1px solid rgba(255,234,0,.4); }
+
+    /* ── Risk level badges ─────────────────────────────────── */
+    .risk-LOW    { background: rgba(0,230,118,.15);  color: var(--safe);    border: 1px solid rgba(0,230,118,.4);  padding: 3px 12px; border-radius: 20px; font-size: .78rem; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+    .risk-MEDIUM { background: rgba(255,234,0,.12);  color: var(--suspect); border: 1px solid rgba(255,234,0,.4);  padding: 3px 12px; border-radius: 20px; font-size: .78rem; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+    .risk-HIGH   { background: rgba(255,23,68,.15);  color: var(--unsafe);  border: 1px solid rgba(255,23,68,.4);  padding: 3px 12px; border-radius: 20px; font-size: .78rem; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+
+    /* ── Risk score bar ────────────────────────────────────── */
+    .score-wrap { display: flex; align-items: center; gap: 8px; }
+    .score-bar  { width: 60px; height: 6px; background: #1e3a5f; border-radius: 3px; overflow: hidden; }
+    .score-fill { height: 100%; border-radius: 3px; }
+    .score-num  { font-family: 'Share Tech Mono', monospace; font-size: .82rem; color: var(--text); min-width: 28px; }
+
+    /* ── Advice text ───────────────────────────────────────── */
+    .advice-safe   { color: var(--safe);    font-size: .8rem; font-family: 'Share Tech Mono', monospace; }
+    .advice-medium { color: var(--suspect); font-size: .8rem; font-family: 'Share Tech Mono', monospace; }
+    .advice-high   { color: var(--unsafe);  font-size: .8rem; font-family: 'Share Tech Mono', monospace; }
+
+    /* ── Recommended network banner ────────────────────────── */
+    #recommend-box {
+      width: 100%;
+      max-width: 980px;
+      background: rgba(0,230,118,.08);
+      border: 1px solid rgba(0,230,118,.3);
+      border-radius: 8px;
+      padding: 12px 20px;
+      margin-bottom: 16px;
+      font-size: .88rem;
+      color: var(--safe);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    /* ── Star icon for recommended row ────────────────────── */
+    td.ssid .star { color: #ffd700; margin-left: 6px; font-size: .85rem; }
+
+    /* NEW: signal strength label colors */
+    .sig-high   { color: var(--safe);    font-weight: 700; }
+    .sig-medium { color: var(--suspect); font-weight: 700; }
+    .sig-low    { color: var(--unsafe);  font-weight: 700; }
+
+    /* NEW: count column - center aligned */
+    td.count {
+      text-align: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9rem;
+      color: var(--text);
+    }
+
+    /* NEW: Connect button in each row */
+    .btn-connect {
+      padding: 5px 14px;
+      font-size: .78rem;
+      font-weight: 700;
+      font-family: 'Share Tech Mono', monospace;
+      border-radius: 5px;
+      cursor: pointer;
+      border: none;
+      letter-spacing: .5px;
+      transition: opacity .2s;
+    }
+    .btn-connect:hover   { opacity: .8; }
+    .btn-connect.safe    { background: rgba(0,230,118,.2);  color: var(--safe);    border: 1px solid rgba(0,230,118,.5); }
+    .btn-connect.unsafe  { background: rgba(255,23,68,.2);  color: var(--unsafe);  border: 1px solid rgba(255,23,68,.5); }
+    .btn-connect.suspect { background: rgba(255,234,0,.15); color: var(--suspect); border: 1px solid rgba(255,234,0,.5); }
+
+    /* NEW: Warning popup overlay */
+    #popup-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #popup-overlay.show { display: flex; }
+
+    #popup-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+    }
+    #popup-box .popup-icon  { font-size: 2.5rem; margin-bottom: 12px; }
+    #popup-box .popup-title { font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    #popup-box .popup-msg   { font-size: .88rem; color: var(--text); margin-bottom: 24px; line-height: 1.6; }
+    .popup-btns { display: flex; gap: 12px; justify-content: center; }
+    .popup-btns button { padding: 10px 24px; border-radius: 6px; font-weight: 700; font-size: .9rem; cursor: pointer; border: none; }
+    #popup-cancel  { background: transparent; color: var(--dim);    border: 1px solid var(--border) !important; }
+    #popup-confirm { background: var(--unsafe); color: #fff; }
+
+    /* NEW: Toast notification (bottom center) */
+    #toast {
+      display: none;
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a2a3a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      color: #fff;
+      z-index: 200;
+      white-space: nowrap;
+    }
+    #toast.show { display: block; }
+
+    /* ── Empty state ──────────────────────────────────────── */
+    #emptyRow td {
+      text-align: center;
+      color: var(--dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      padding: 36px;
+    }
+
+    /* ── Legend ───────────────────────────────────────────── */
+    .legend {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 24px;
+      font-size: .8rem;
+      color: var(--dim);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .legend span { display: flex; align-items: center; gap: 7px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot-safe    { background: var(--safe); }
+    .dot-unsafe  { background: var(--unsafe); }
+    .dot-suspect { background: var(--suspect); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <span class="icon">📡</span>
+    <h1>Wi-Fi <span>Security</span> Detector</h1>
+    <p class="subtitle">// Public Network Risk Scanner //</p>
+  </header>
+
+  <!-- ── Buttons ── -->
+  <div class="btn-row">
+    <button id="btnScan">🔍 Scan Wi-Fi</button>
+    <button id="btnDemo">🧪 Demo Mode</button>
+  </div>
+
+  <!-- ── Status line ── -->
+  <p id="status">Ready. Click a button to begin.</p>
+
+  <!-- ── Recommendation banner (hidden until scan runs) ── -->
+  <div id="recommend-box" style="display:none"></div>
+
+  <!-- ── Results table ── -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>SSID (Network Name)</th>
+          <th>Security</th>
+          <th>Risk Score</th>
+          <th>Risk Level</th>
+          <th>Signal</th>
+          <th>Advice</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr id="emptyRow">
+          <td colspan="7">No results yet. Run a scan or try Demo Mode.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Legend ── -->
+  <div class="legend">
+    <span><i class="dot dot-safe"></i> SAFE – WPA2 / WPA3</span>
+    <span><i class="dot dot-unsafe"></i> UNSAFE – Open network</span>
+    <span><i class="dot dot-suspect"></i> SUSPICIOUS – Duplicate SSID</span>
+  </div>
+
+  <!-- ── Warning Popup (shown for UNSAFE / SUSPICIOUS) ── -->
+  <div id="popup-overlay">
+    <div id="popup-box">
+      <div class="popup-icon" id="popup-icon">⚠️</div>
+      <div class="popup-title" id="popup-title">Warning</div>
+      <div class="popup-msg"  id="popup-msg">This network may be unsafe.</div>
+      <div class="popup-btns">
+        <button id="popup-cancel">✕ Cancel</button>
+        <button id="popup-confirm">Connect Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast notification ── -->
+  <div id="toast"></div>
+
+  <!-- ── JavaScript ── -->
+  <script>
+    const tbody   = document.getElementById("tableBody");
+    const status  = document.getElementById("status");
+    const btnScan = document.getElementById("btnScan");
+    const btnDemo = document.getElementById("btnDemo");
+
+    // ── Hardcoded demo data (runs in browser, no Flask needed) ───────────────
+    const DEMO_NETWORKS = [
+      { ssid: "Home_Network",  security: "WPA2", signal: 85 },
+      { ssid: "Cafe_Wifi",     security: "Open", signal: 60 },
+      { ssid: "Free_Wifi",     security: "Open", signal: 45 },
+      { ssid: "Free_Wifi",     security: "Open", signal: 50 }, // duplicate → SUSPICIOUS
+      { ssid: "Office_Net",    security: "WPA3", signal: 78 },
+      { ssid: "PublicHotspot", security: "Open", signal: 30 },
+    ];
+
+    // ── Classify signal percentage → High / Medium / Low ─────────────────────
+    function signalLabel(pct) {
+      if (pct >= 70) return "High";
+      if (pct >= 40) return "Medium";
+      return "Low";
+    }
+
+    // ── Calculate risk score (0–100) ─────────────────────────────────────────
+    // Same logic as Python backend — keep them in sync
+    function calcRisk(net, counts) {
+      let score = 0;
+      if (net.security.toLowerCase() === "open") score += 50; // no encryption
+      if (counts[net.ssid] > 1)                  score += 30; // duplicate SSID
+      if (net.signal < 40)                       score += 20; // weak signal
+      return Math.min(score, 100);
+    }
+
+    // ── Risk level from score ─────────────────────────────────────────────────
+    function riskLevel(score) {
+      if (score <= 30) return { level: "LOW",    warning: "Safe to use" };
+      if (score <= 70) return { level: "MEDIUM", warning: "Use cautiously" };
+      return             { level: "HIGH",   warning: "Avoid connecting" };
+    }
+
+    // ── Annotate demo data (mirrors Python annotate()) ────────────────────────
+    function annotateDemo(networks) {
+      const counts = {};
+      networks.forEach(n => counts[n.ssid] = (counts[n.ssid] || 0) + 1);
+
+      let result = networks.map(n => {
+        let st;
+        if (counts[n.ssid] > 1)                      st = "SUSPICIOUS";
+        else if (n.security.toLowerCase() === "open") st = "UNSAFE";
+        else                                          st = "SAFE";
+
+        const score = calcRisk(n, counts);
+        const { level, warning } = riskLevel(score);
+
+        return {
+          ...n,
+          status:       st,
+          count:        counts[n.ssid],
+          signal_label: signalLabel(n.signal),
+          risk_score:   score,
+          risk_level:   level,
+          warning:      warning,
+          recommended:  false,
+        };
+      });
+
+      // Sort safest first
+      result.sort((a, b) => a.risk_score - b.risk_score);
+
+      // Mark recommended network: SAFE + not duplicate + signal ≥ 70
+      let recIdx = result.findIndex(n => n.status === "SAFE" && n.count === 1 && n.signal >= 70);
+      if (recIdx === -1) recIdx = 0; // fallback: first in sorted list
+      result[recIdx].recommended = true;
+
+      return result;
+    }
+
+    // ── Show recommendation banner above table ────────────────────────────────
+    function showRecommendation(data) {
+      const rec  = data.find(n => n.recommended);
+      const box  = document.getElementById("recommend-box");
+      if (rec) {
+        box.innerHTML = `⭐ <strong>Recommended:</strong> Connect to <strong>"${escHtml(rec.ssid)}"</strong> — Risk Score: ${rec.risk_score}/100 · ${rec.warning}`;
+        box.style.display = "block";
+      } else {
+        box.style.display = "none";
+      }
+    }
+
+    // ── Render rows into table ────────────────────────────────────────────────
+    function renderRows(data) {
+      tbody.innerHTML = "";
+      showRecommendation(data);
+
+      data.forEach(net => {
+        const sigClass = net.signal_label === "High"   ? "sig-high"
+                       : net.signal_label === "Medium" ? "sig-medium"
+                       :                                 "sig-low";
+
+        // Score bar color: green → yellow → red
+        const barColor = net.risk_score <= 30 ? "var(--safe)"
+                       : net.risk_score <= 70 ? "var(--suspect)"
+                       :                        "var(--unsafe)";
+
+        const adviceClass = net.risk_level === "LOW"    ? "advice-safe"
+                          : net.risk_level === "MEDIUM" ? "advice-medium"
+                          :                               "advice-high";
+
+        const btnClass = net.status === "SAFE"   ? "safe"
+                       : net.status === "UNSAFE" ? "unsafe"
+                       :                           "suspect";
+
+        // Star for recommended network
+        const star = net.recommended ? '<span class="star">⭐</span>' : "";
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="ssid">${escHtml(net.ssid)}${star}</td>
+          <td class="security">${escHtml(net.security)}</td>
+          <td>
+            <div class="score-wrap">
+              <div class="score-bar"><div class="score-fill" style="width:${net.risk_score}%;background:${barColor}"></div></div>
+              <span class="score-num">${net.risk_score}</span>
+            </div>
+          </td>
+          <td><span class="risk-${net.risk_level}">${net.risk_level}</span></td>
+          <td class="security"><span class="${sigClass}">${net.signal_label}</span> (${net.signal}%)</td>
+          <td class="${adviceClass}">${net.warning}</td>
+          <td><button class="btn-connect ${btnClass}" onclick="handleConnect('${escHtml(net.ssid)}','${net.status}','${net.risk_level}')">⚡ Connect</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showEmpty() {
+      document.getElementById("recommend-box").style.display = "none";
+      tbody.innerHTML = `<tr id="emptyRow"><td colspan="7">No results. Try again.</td></tr>`;
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    // ── Toast: show a message at bottom of screen for 3 seconds ─────────────
+    function showToast(msg, color) {
+      const toast = document.getElementById("toast");
+      toast.textContent = msg;
+      toast.style.borderColor = color || "var(--border)";
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    // ── Actually call Flask /connect/<ssid> ──────────────────────────────────
+    async function doConnect(ssid) {
+      showToast("⏳ Connecting to " + ssid + "…", "var(--accent)");
+      try {
+        const res  = await fetch("/connect/" + encodeURIComponent(ssid));
+        const data = await res.json();
+        if (data.success) {
+          showToast("✅ " + data.message, "var(--safe)");
+          status.textContent = "✅ Connected to: " + ssid;
+        } else {
+          showToast("❌ " + data.message, "var(--unsafe)");
+        }
+      } catch (err) {
+        showToast("❌ Flask not running. Start python app.py first.", "var(--unsafe)");
+      }
+    }
+
+    // ── Handle Connect button click ──────────────────────────────────────────
+    function handleConnect(ssid, networkStatus, riskLvl) {
+      if (riskLvl === "LOW") {
+        // Low risk → connect directly, no warning
+        doConnect(ssid);
+      } else {
+        // MEDIUM or HIGH risk → show warning popup first
+        const isHigh = riskLvl === "HIGH";
+        document.getElementById("popup-icon").textContent  = isHigh ? "🚨" : "⚠️";
+        document.getElementById("popup-title").textContent = isHigh ? "HIGH RISK — Avoid!" : "Medium Risk — Caution";
+        document.getElementById("popup-msg").textContent   = isHigh
+          ? `"${ssid}" has a HIGH risk score. This could be an open or fake network. Connecting may expose your data to hackers.`
+          : `"${ssid}" has a MEDIUM risk score. Proceed carefully and avoid sharing sensitive information.`;
+        document.getElementById("popup-confirm").onclick = () => {
+          closePopup();
+          doConnect(ssid);
+        };
+        document.getElementById("popup-overlay").classList.add("show");
+      }
+    }
+
+    // ── Close popup ──────────────────────────────────────────────────────────
+    function closePopup() {
+      document.getElementById("popup-overlay").classList.remove("show");
+    }
+    document.getElementById("popup-cancel").onclick  = closePopup;
+    document.getElementById("popup-overlay").onclick = (e) => {
+      if (e.target === document.getElementById("popup-overlay")) closePopup();
+    };
+
+    // ── Scan Wi-Fi → calls Flask backend ────────────────────────────────────
+    btnScan.addEventListener("click", async () => {
+      btnScan.disabled = true;
+      btnDemo.disabled = true;
+      status.textContent = "⏳ Scanning nearby Wi-Fi…";
+      tbody.innerHTML = "";
+
+      try {
+        const res  = await fetch("/scan");
+        const data = await res.json();
+        if (data.error) {
+          status.textContent = "❌ " + data.error;
+          showEmpty();
+        } else {
+          renderRows(data);
+          status.textContent = `✅ Found ${data.length} real network(s).`;
+        }
+      } catch (err) {
+        status.textContent = "⚠️ Flask not running! Open CMD → run: python app.py → open http://127.0.0.1:5000";
+        showEmpty();
+      } finally {
+        btnScan.disabled = false;
+        btnDemo.disabled = false;
+      }
+    });
+
+    // ── Demo Mode → runs fully in browser, NO Flask needed ──────────────────
+    btnDemo.addEventListener("click", () => {
+      btnScan.disabled = true;
+      btnDemo.disabled = true;
+      status.textContent = "⏳ Loading demo data…";
+      setTimeout(() => {
+        const results = annotateDemo(DEMO_NETWORKS);
+        renderRows(results);
+        status.textContent = `✅ Demo loaded — ${results.length} networks shown.`;
+        btnScan.disabled = false;
+        btnDemo.disabled = false;
+      }, 500);
+    });
+  </script>
+
+</body>
+</html>
